@@ -1,0 +1,84 @@
+# Multi-stage build for Cyber Companion Bot
+FROM python:3.10-slim as builder
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    gcc \
+    g++ \
+    make \
+    libffi-dev \
+    libssl-dev \
+    net-tools \
+    iputils-ping \
+    traceroute \
+    dnsutils \
+    nmap \
+    curl \
+    wget \
+    netcat-openbsd \
+    openssh-client \
+    whois \
+    git \
+    && rm -rf /var/lib/apt/lists/*
+
+# Set working directory
+WORKDIR /app
+
+# Copy requirements first for better caching
+COPY requirements.txt .
+RUN pip install --user --no-cache-dir -r requirements.txt
+
+# Final stage
+FROM python:3.10-slim
+
+# Install runtime dependencies only
+RUN apt-get update && apt-get install -y \
+    net-tools \
+    iputils-ping \
+    traceroute \
+    dnsutils \
+    nmap \
+    curl \
+    wget \
+    netcat-openbsd \
+    openssh-client \
+    whois \
+    procps \
+    && rm -rf /var/lib/apt/lists/*
+
+# Create non-root user
+RUN useradd -m -u 1000 cyberuser && \
+    mkdir -p /app && \
+    chown -R cyberuser:cyberuser /app
+
+# Copy Python packages from builder
+COPY --from=builder --chown=cyberuser:cyberuser /root/.local /home/cyberuser/.local
+
+# Set working directory
+WORKDIR /app
+
+# Copy application files
+COPY --chown=cyberuser:cyberuser . .
+
+# Set environment variables
+ENV PATH=/home/cyberuser/.local/bin:$PATH \
+    PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    CYBER_COMPANION_ENV=production
+
+# Create necessary directories
+RUN mkdir -p .cyber_companion reports scan_results temp && \
+    chown -R cyberuser:cyberuser .cyber_companion reports scan_results temp
+
+# Switch to non-root user
+USER cyberuser
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+    CMD python -c "import sys; sys.exit(0)" || exit 1
+
+# Expose ports
+EXPOSE 8080
+
+# Run the application
+ENTRYPOINT ["python", "cyber_companion_bot.py"]

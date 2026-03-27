@@ -1,0 +1,129 @@
+# Makefile for Cyber Companion Bot
+
+.PHONY: help install run test clean docker-build docker-run docker-stop
+
+# Colors
+GREEN := \033[0;32m
+RED := \033[0;31m
+YELLOW := \033[0;33m
+NC := \033[0m # No Color
+
+help: ## Show this help message
+	@echo 'Usage: make [target]'
+	@echo ''
+	@echo 'Available targets:'
+	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "  $(GREEN)%-20s$(NC) %s\n", $$1, $$2}'
+
+install: ## Install dependencies
+	@echo "$(GREEN)Installing dependencies...$(NC)"
+	pip install -r requirements.txt
+	@echo "$(GREEN)✅ Installation complete$(NC)"
+
+run: ## Run the application
+	@echo "$(GREEN)Starting Cyber Companion Bot...$(NC)"
+	python cyber_companion_bot.py
+
+test: ## Run tests
+	@echo "$(GREEN)Running tests...$(NC)"
+	pytest tests/ -v --cov=. --cov-report=html --cov-report=term
+
+lint: ## Run linters
+	@echo "$(GREEN)Running linters...$(NC)"
+	flake8 cyber_companion_bot.py --max-line-length=120 --statistics
+	pylint cyber_companion_bot.py --exit-zero
+	bandit -r . -f custom
+
+security: ## Run security checks
+	@echo "$(GREEN)Running security checks...$(NC)"
+	safety check -r requirements.txt
+	bandit -r . -f json -o reports/security-report.json
+
+clean: ## Clean up generated files
+	@echo "$(GREEN)Cleaning up...$(NC)"
+	find . -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
+	find . -type f -name "*.pyc" -delete
+	rm -rf .pytest_cache/
+	rm -rf htmlcov/
+	rm -rf .coverage
+	rm -rf reports/
+	rm -rf .cyber_companion/*.db
+	rm -rf scan_results/*
+	rm -rf temp/*
+	@echo "$(GREEN)✅ Cleanup complete$(NC)"
+
+docker-build: ## Build Docker image
+	@echo "$(GREEN)Building Docker image...$(NC)"
+	docker build -t cyber-companion:latest .
+	@echo "$(GREEN)✅ Docker image built$(NC)"
+
+docker-run: ## Run Docker container
+	@echo "$(GREEN)Starting Docker container...$(NC)"
+	docker run -it --rm \
+		--name cyber-companion \
+		-p 8080:8080 \
+		-v $(PWD)/data:/app/.cyber_companion \
+		-v $(PWD)/reports:/app/reports \
+		-v $(PWD)/scan_results:/app/scan_results \
+		-e DISCORD_TOKEN=$(DISCORD_TOKEN) \
+		-e TELEGRAM_API_ID=$(TELEGRAM_API_ID) \
+		-e TELEGRAM_API_HASH=$(TELEGRAM_API_HASH) \
+		cyber-companion:latest
+
+docker-stop: ## Stop Docker container
+	@echo "$(GREEN)Stopping Docker container...$(NC)"
+	docker stop cyber-companion 2>/dev/null || true
+	@echo "$(GREEN)✅ Container stopped$(NC)"
+
+docker-compose-up: ## Start with docker-compose
+	@echo "$(GREEN)Starting with docker-compose...$(NC)"
+	docker-compose up -d
+	@echo "$(GREEN)✅ Services started$(NC)"
+
+docker-compose-down: ## Stop docker-compose services
+	@echo "$(GREEN)Stopping docker-compose services...$(NC)"
+	docker-compose down
+	@echo "$(GREEN)✅ Services stopped$(NC)"
+
+logs: ## Show logs
+	docker-compose logs -f cyber-companion
+
+shell: ## Access container shell
+	docker exec -it cyber-companion-bot /bin/bash
+
+setup: install ## Complete setup
+	@echo "$(GREEN)Setting up project...$(NC)"
+	mkdir -p .cyber_companion reports scan_results temp logs
+	chmod 755 .cyber_companion reports scan_results temp logs
+	@echo "$(GREEN)✅ Setup complete$(NC)"
+
+dev: ## Run in development mode
+	@echo "$(GREEN)Starting in development mode...$(NC)"
+	export CYBER_COMPANION_ENV=development
+	python cyber_companion_bot.py
+
+prod: ## Run in production mode
+	@echo "$(GREEN)Starting in production mode...$(NC)"
+	export CYBER_COMPANION_ENV=production
+	python cyber_companion_bot.py
+
+backup: ## Backup database and config
+	@echo "$(GREEN)Creating backup...$(NC)"
+	@mkdir -p backups
+	@tar -czf backups/cyber-companion-backup-$(shell date +%Y%m%d-%H%M%S).tar.gz \
+		.cyber_companion/*.db \
+		.cyber_companion/*.json \
+		reports/ \
+		scan_results/
+	@echo "$(GREEN)✅ Backup created in backups/$(NC)"
+
+monitor: ## Monitor system resources
+	@echo "$(GREEN)Monitoring system resources...$(NC)"
+	@docker stats cyber-companion-bot --no-stream
+
+update: ## Update dependencies
+	@echo "$(GREEN)Updating dependencies...$(NC)"
+	pip install --upgrade -r requirements.txt
+	@echo "$(GREEN)✅ Dependencies updated$(NC)"
+
+# Default target
+.DEFAULT_GOAL := help

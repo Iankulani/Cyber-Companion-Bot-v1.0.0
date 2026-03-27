@@ -1,0 +1,30 @@
+version: '3.8'
+
+services:
+  cyber-companion:
+    build: .
+    container_name: cyber-companion-bot
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./data:/app/.cyber_companion
+      - ./reports:/app/reports
+      - ./scan_results:/app/scan_results
+      - ./logs:/app/logs
+    environment:
+      - DISCORD_TOKEN=${DISCORD_TOKEN}
+      - TELEGRAM_API_ID=${TELEGRAM_API_ID}
+      - TELEGRAM_API_HASH=${TELEGRAM_API_HASH}
+      - CYBER_COMPANION_ENV=production
+    networks:
+      - cyber-network
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+networks:
+  cyber-network:
+    driver: bridge

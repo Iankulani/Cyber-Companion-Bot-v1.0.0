@@ -1,0 +1,19 @@
+version: '3.8'
+
+services:
+  cyber-companion:
+    build: 
+      context: .
+      dockerfile: Dockerfile
+    volumes:
+      - ./:/app
+      - ./data:/app/.cyber_companion
+      - ./reports:/app/reports
+      - ./scan_results:/app/scan_results
+      - ./logs:/app/logs
+    environment:
+      - CYBER_COMPANION_ENV=development
+      - PYTHONUNBUFFERED=1
+    command: python3 cyber_companion_bot.py
+    stdin_open: true
+    tty: true
